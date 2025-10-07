@@ -1,0 +1,44 @@
+openapi: 3.0.3
+info:
+  title: Smart Delivery API
+  version: 0.1.0
+servers:
+  - url: http://localhost:4000
+paths:
+  /api/auth/login:
+    post:
+      summary: Login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200': { description: OK }
+  /api/auth/me:
+    get:
+      summary: Current user
+      responses:
+        '200': { description: OK }
+  /api/users:
+    get: { summary: List users, responses: { '200': { description: OK } } }
+    post: { summary: Create user, responses: { '201': { description: Created } } }
+  /api/orders:
+    get: { summary: List orders, responses: { '200': { description: OK } } }
+    post: { summary: Create order, responses: { '201': { description: Created } } }
+  /api/orders/{id}/assign:
+    put: { summary: Assign order, responses: { '200': { description: OK } } }
+  /api/orders/{id}/status:
+    put: { summary: Update status, responses: { '200': { description: OK } } }
+  /api/vehicles:
+    get: { summary: List vehicles, responses: { '200': { description: OK } } }
+    post: { summary: Create vehicle, responses: { '201': { description: Created } } }
+  /api/tracking/location:
+    post: { summary: Update driver location, responses: { '201': { description: Created } } }
+

@@ -1,0 +1,9 @@
+export default function Admin() {
+  return (
+    <div>
+      <h1>Admin Dashboard</h1>
+      <p>KPIs, Users management, Reports (placeholders)</p>
+    </div>
+  )
+}
+
