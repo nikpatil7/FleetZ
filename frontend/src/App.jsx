@@ -3,6 +3,7 @@ import Login from './pages/Login.jsx'
 import Admin from './pages/Admin.jsx'
 import Manager from './pages/Manager.jsx'
 import Driver from './pages/Driver.jsx'
+import ProtectedRoute from './components/ProtectedRoute.jsx'
 
 function App() {
   return (
@@ -13,9 +14,30 @@ function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="/login" element={<Login />} />
-        <Route path="/admin" element={<Admin />} />
-        <Route path="/manager" element={<Manager />} />
-        <Route path="/driver" element={<Driver />} />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute roles={[ 'admin' ]}>
+              <Admin />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/manager"
+          element={
+            <ProtectedRoute roles={[ 'manager', 'admin' ]}>
+              <Manager />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/driver"
+          element={
+            <ProtectedRoute roles={[ 'driver' ]}>
+              <Driver />
+            </ProtectedRoute>
+          }
+        />
         <Route path="*" element={<div>Not found</div>} />
       </Routes>
     </BrowserRouter>

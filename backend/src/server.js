@@ -13,6 +13,7 @@ import userRoutes from './routes/users.js'
 import orderRoutes from './routes/orders.js'
 import vehicleRoutes from './routes/vehicles.js'
 import trackingRoutes from './routes/tracking.js'
+import analyticsRoutes from './routes/analytics.js'
 
 const app = express()
 
@@ -35,6 +36,7 @@ app.use('/api/users', userRoutes)
 app.use('/api/orders', orderRoutes)
 app.use('/api/vehicles', vehicleRoutes)
 app.use('/api/tracking', trackingRoutes)
+app.use('/api/analytics', analyticsRoutes)
 
 const server = http.createServer(app)
 const io = new SocketIOServer(server, {
