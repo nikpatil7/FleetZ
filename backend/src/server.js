@@ -80,6 +80,7 @@ app.use(cookieParser());
 app.use(logger);
 
 // Rate limiting
+const isTest = env.nodeEnv === 'test';
 const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 1000, // limit each IP to 1000 requests per windowMs
@@ -90,7 +91,7 @@ const generalLimiter = rateLimit({
 
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 10, // limit each IP to 10 auth requests per windowMs
+  max: isTest ? 100 : 10, // relax limiter during tests
   message: 'Too many authentication attempts, please try again later.',
   standardHeaders: true,
   legacyHeaders: false,
@@ -106,7 +107,9 @@ const apiLimiter = rateLimit({
 
 // Apply rate limiting
 app.use(generalLimiter);
-app.use('/api/auth', authLimiter);
+if (!isTest) {
+  app.use('/api/auth', authLimiter);
+}
 app.use('/api', apiLimiter);
 
 // Health check endpoint

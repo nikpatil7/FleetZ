@@ -4,7 +4,7 @@ import User from '../models/User.js';
 import { errorResponse } from '../utils/response.js';
 import httpStatus from 'http-status';
 
-export function authenticate(req, res, next) {
+export async function authenticate(req, res, next) {
   const authHeader = req.headers.authorization || '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
   
@@ -13,8 +13,19 @@ export function authenticate(req, res, next) {
   }
 
   try {
-    const payload = jwt.verify(token, env.jwtSecret);
-    req.user = payload;
+    const payload = jwt.verify(token, env.jwtSecret, {
+      issuer: 'smart-delivery-api',
+      audience: 'smart-delivery-clients'
+    });
+    // Validate tokenVersion live
+    const user = await User.findById(payload.id).select('tokenVersion isActive role');
+    if (!user || !user.isActive) {
+      return errorResponse(res, 'Invalid token', httpStatus.UNAUTHORIZED);
+    }
+    if (typeof payload.tokenVersion === 'number' && payload.tokenVersion !== user.tokenVersion) {
+      return errorResponse(res, 'Token expired', httpStatus.UNAUTHORIZED);
+    }
+    req.user = { id: String(user._id), role: user.role, tokenVersion: user.tokenVersion };
     return next();
   } catch (error) {
     if (error.name === 'TokenExpiredError') {

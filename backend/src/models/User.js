@@ -102,6 +102,11 @@ const UserSchema = new mongoose.Schema(
       },
       language: { type: String, default: 'en' },
       timezone: { type: String, default: 'Asia/Kolkata' }
+    },
+    tokenVersion: {
+      type: Number,
+      default: 0,
+      index: true
     }
   },
   { 

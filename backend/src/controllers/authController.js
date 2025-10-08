@@ -5,23 +5,35 @@ import { successResponse, errorResponse } from '../utils/response.js';
 import { asyncHandler } from '../middleware/asyncHandler.js';
 import httpStatus from 'http-status';
 import env from '../config/env.js';
+import {
+  generateJti,
+  signAccessToken,
+  signRefreshToken,
+  persistRefreshToken,
+  revokeRefreshTokenByJti,
+  revokeAllUserRefreshTokens,
+  isRefreshTokenValid,
+  msFromJwtExp
+} from '../services/tokenService.js';
 
-// Generate JWT tokens
-const generateTokens = (userId, role) => {
-  const accessToken = jwt.sign(
-    { id: userId, role: role },
-    env.jwtSecret,
-    { expiresIn: '15m' }
-  );
-  
-  const refreshToken = jwt.sign(
-    { id: userId, role: role },
-    env.jwtRefreshSecret,
-    { expiresIn: '7d' }
-  );
-  
-  return { accessToken, refreshToken };
-};
+// Generate JWT tokens with jti and tokenVersion, and persist refresh token
+async function issueTokens(user, req) {
+  const jti = generateJti();
+  const accessPayload = { id: user._id, role: user.role, tokenVersion: user.tokenVersion, jti };
+  const refreshPayload = { id: user._id, role: user.role, tokenVersion: user.tokenVersion, jti };
+  const accessToken = signAccessToken(accessPayload);
+  const refreshToken = signRefreshToken(refreshPayload);
+  const refreshTtlMs = msFromJwtExp(env.jwtRefreshExpire || '7d');
+  await persistRefreshToken({
+    userId: user._id,
+    jti,
+    refreshToken,
+    expiresInMs: refreshTtlMs,
+    ip: req.ip,
+    userAgent: req.get('user-agent') || null
+  });
+  return { accessToken, refreshToken, jti };
+}
 
 // @desc    Login user
 // @route   POST /api/auth/login
@@ -54,8 +66,8 @@ export const login = asyncHandler(async (req, res) => {
   // Update last seen
   await user.updateLastSeen();
 
-  // Generate tokens
-  const { accessToken, refreshToken } = generateTokens(user._id, user.role);
+  // Generate tokens with rotation-ready metadata
+  const { accessToken, refreshToken } = await issueTokens(user, req);
 
   // Prepare user data (exclude sensitive information)
   const userData = user.toSafeObject();
@@ -78,23 +90,33 @@ export const refreshToken = asyncHandler(async (req, res) => {
   }
 
   try {
-    // Verify refresh token
-    const decoded = jwt.verify(refreshToken, env.jwtRefreshSecret);
-    
-    // Check if user still exists and is active
+    const decoded = jwt.verify(refreshToken, env.jwtRefreshSecret, {
+      issuer: 'smart-delivery-api',
+      audience: 'smart-delivery-clients'
+    });
+
     const user = await User.findById(decoded.id);
     if (!user || !user.isActive) {
       return errorResponse(res, 'Invalid refresh token', httpStatus.UNAUTHORIZED);
     }
 
-    // Generate new access token
-    const accessToken = jwt.sign(
-      { id: user._id, role: user.role },
-      env.jwtSecret,
-      { expiresIn: '15m' }
-    );
+    // Validate tokenVersion and server-side refresh token record
+    if (decoded.tokenVersion !== user.tokenVersion) {
+      await revokeAllUserRefreshTokens(user._id);
+      return errorResponse(res, 'Invalid refresh token', httpStatus.UNAUTHORIZED);
+    }
 
-    successResponse(res, { accessToken }, 'Token refreshed successfully', httpStatus.OK);
+    const validity = await isRefreshTokenValid({ userId: user._id, jti: decoded.jti, token: refreshToken });
+    if (!validity.valid) {
+      // Reuse or revoked: global revoke as precaution
+      await revokeAllUserRefreshTokens(user._id);
+      return errorResponse(res, 'Invalid refresh token', httpStatus.UNAUTHORIZED);
+    }
+
+    // Rotation: revoke old and issue new pair
+    await revokeRefreshTokenByJti(user._id, decoded.jti);
+    const { accessToken, refreshToken: newRefresh } = await issueTokens(user, req);
+    successResponse(res, { accessToken, refreshToken: newRefresh }, 'Token refreshed successfully', httpStatus.OK);
   } catch (error) {
     return errorResponse(res, 'Invalid refresh token', httpStatus.UNAUTHORIZED);
   }
@@ -117,8 +139,18 @@ export const getMe = asyncHandler(async (req, res) => {
 // @route   POST /api/auth/logout
 // @access  Private
 export const logout = asyncHandler(async (req, res) => {
-  // In a more sophisticated setup, you might want to blacklist the token
-  // For now, we'll just return a success message
+  const refreshToken = req.body?.refreshToken || null;
+  try {
+    if (refreshToken) {
+      const decoded = jwt.verify(refreshToken, env.jwtRefreshSecret, {
+        issuer: 'smart-delivery-api',
+        audience: 'smart-delivery-clients'
+      });
+      if (decoded?.id && decoded?.jti) {
+        await revokeRefreshTokenByJti(decoded.id, decoded.jti);
+      }
+    }
+  } catch (_) {}
   successResponse(res, null, 'Logout successful', httpStatus.OK);
 });
 
@@ -147,6 +179,11 @@ export const changePassword = asyncHandler(async (req, res) => {
   // Update password
   user.passwordHash = newPassword;
   await user.save();
+
+  // Invalidate existing tokens immediately
+  user.tokenVersion = (user.tokenVersion || 0) + 1;
+  await user.save();
+  await revokeAllUserRefreshTokens(user._id);
 
   successResponse(res, null, 'Password changed successfully', httpStatus.OK);
 });
