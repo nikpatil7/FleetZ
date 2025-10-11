@@ -7,19 +7,10 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Dependencies
 node_modules
 dist
 dist-ssr
 *.local
-
-# Environment variables
-.env
-.env.*.local
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
 
 # Editor directories and files
 .vscode/*
@@ -31,29 +22,3 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
-
-# Coverage directory
-coverage/
-*.lcov
-
-# Cache directories
-.npm
-.eslintcache
-.stylelintcache
-.parcel-cache
-
-# Temporary folders
-tmp/
-temp/
-
-# Typescript cache
-*.tsbuildinfo
-
-# Storybook build
-storybook-static
-
-# Cypress test files
-cypress/screenshots/
-cypress/videos/
-
-.env.example
